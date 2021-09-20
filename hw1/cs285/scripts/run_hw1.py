@@ -1,3 +1,5 @@
+"""(READ-ONLY). Trains behavior cloning agent, optionally using DAgger."""
+
 import os
 import time
 
