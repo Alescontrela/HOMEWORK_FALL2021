@@ -3,11 +3,13 @@ import itertools
 from torch import nn
 from torch.nn import functional as F
 from torch import optim
+from typing import cast
 
 import numpy as np
 import torch
 from torch import distributions
 
+from cs285.infrastructure import utils
 from cs285.infrastructure import pytorch_util as ptu
 from cs285.policies.base_policy import BasePolicy
 
@@ -69,7 +71,7 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
                 n_layers=self.n_layers,
                 size=self.size,
             )
-            self.baseline.to(device)
+            self.baseline.to(ptu.device)
             self.baseline_optimizer = optim.Adam(
                 self.baseline.parameters(),
                 self.learning_rate,
@@ -87,6 +89,23 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     # query the policy with observation(s) to get selected action(s)
     def get_action(self, obs: np.ndarray) -> np.ndarray:
         # TODO: get this from HW1
+        if len(obs.shape) > 1:
+            observation = obs
+        else:
+            observation = obs[None]
+
+        obs = ptu.from_numpy(observation)
+        # observation_tensor = torch.tensor(observation, dtype=torch.float).to(ptu.device)
+        action_distribution = self.forward(obs)
+        return cast(
+            np.ndarray,
+            action_distribution.sample().cpu().detach().numpy(),
+        )
+        # # TODO return the action that the policy prescribes
+        # if self.discrete:
+        #     return torch.argmax(self.logits_na(ptu.from_numpy(observation)))
+        # else:
+        #     return self.mean_net(ptu.from_numpy(observation))
 
     # update/train this policy
     def update(self, observations, actions, **kwargs):
@@ -137,7 +156,15 @@ class MLPPolicyPG(MLPPolicy):
         # HINT4: use self.optimizer to optimize the loss. Remember to
             # 'zero_grad' first
 
-        TODO
+        dist = self.forward(observations)
+        log_prob = dist.log_prob(actions)
+        # if not self.discrete:
+        #     log_prob = log_prob.sum(1)
+        loss = -torch.dot(log_prob, advantages) / len(q_values)
+        # loss = -(log_prob * advantages).sum()
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
         if self.nn_baseline:
             ## TODO: update the neural network baseline using the q_values as
@@ -148,12 +175,51 @@ class MLPPolicyPG(MLPPolicy):
                 ## updating the baseline. Remember to 'zero_grad' first
             ## HINT2: You will need to convert the targets into a tensor using
                 ## ptu.from_numpy before using it in the loss
+            # self.baseline_optimizer.zero_grad()
+            # q_vals_concat = np.expand_dims(np.concatenate(q_values), axis=-1)
+            # standardized_q_values = (q_values - np.mean(q_vals_concat)) / np.std(q_vals_concat)
 
-            TODO
+            # baseline_losses = []
+            # i = 0
+            # for curr_q_values in standardized_q_values:
+            #     # Get observations[:-1] and next_obs = observations[1:]
+            #     curr_obs = observations[i:i + len(curr_q_values) - 1]
+            #     next_obs = observations[i + 1:i + len(curr_q_values)]
+            #     curr_q_values_pt = ptu.from_numpy(np.expand_dims(curr_q_values[:-1], axis=-1))
+            #     baseline_losses.append(self.baseline_loss(
+            #         self.baseline(curr_obs),
+            #         curr_q_values_pt + self.baseline(next_obs)
+            #     ))
+            #     i += len(curr_q_values)
+            # baseline_loss = torch.stack(baseline_losses, dim=0).sum(dim=0)
+            # baseline_loss = torch.sum(baseline_losses)
+
+
+            # standardized_q_values = ptu.from_numpy(
+            #     (q_vals_concat - np.mean(q_vals_concat)) / np.std(q_vals_concat))
+
+            # Not right but just playing with this idea for now.
+            # next_observations = torch.roll(observations, 1)
+            
+            # print("===")
+            # print(standardized_q_values.size())
+            # print(self.baseline(next_observations).size())
+            # print(torch.add(standardized_q_values, self.baseline(next_observations)).size())
+            q_vals_concat = np.expand_dims(np.concatenate(q_values), axis=-1)
+            targets = ptu.from_numpy(utils.normalize(q_vals_concat, q_vals_concat.mean(), q_vals_concat.std()))
+            # standardized_q_values = ptu.from_numpy(
+            #     (q_vals_concat - np.mean(q_vals_concat)) / (np.std(q_vals_concat) + 1e-8))
+            baseline_loss = F.mse_loss(self.baseline(observations), targets)
+            self.baseline_optimizer.zero_grad()
+            baseline_loss.backward()
+            self.baseline_optimizer.step()
 
         train_log = {
             'Training Loss': ptu.to_numpy(loss),
         }
+
+        if self.nn_baseline:
+            train_log['Baseline Loss'] = ptu.to_numpy(baseline_loss)
         return train_log
 
     def run_baseline_prediction(self, observations):
