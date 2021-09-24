@@ -160,7 +160,7 @@ class MLPPolicyPG(MLPPolicy):
         log_prob = dist.log_prob(actions)
         # if not self.discrete:
         #     log_prob = log_prob.sum(1)
-        loss = -torch.dot(log_prob, advantages) / len(q_values)
+        loss = -torch.dot(log_prob, advantages)
         # loss = -(log_prob * advantages).sum()
         self.optimizer.zero_grad()
         loss.backward()

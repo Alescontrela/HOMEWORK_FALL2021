@@ -106,18 +106,11 @@ class PGAgent(BaseAgent):
             ## TODO: values were trained with standardized q_values, so ensure
                 ## that the predictions have the same mean and standard deviation as
                 ## the current batch of q_values
-            q_mean = np.mean(q_values)
-            q_std = np.std(q_values)
-            value_mean = np.mean(values_unnormalized)
-            value_std = np.std(values_unnormalized)
-            # print(value_mean, value_std, q_mean, q_std)
-            # values = values_unnormalized * q_std + q_mean
-            # values = utils.unnormalize(values_unnormalized, q_mean, q_std)
-            values = q_mean + (values_unnormalized - value_mean) * (q_std / value_std)
-            # values_normalized = utils.normalize(
-            #     values_unnormalized, np.mean(values_unnormalized), np.std(values_unnormalized))
-            # values = utils.unnormalize(
-            #     values_normalized, np.mean(q_values), np.std(q_values))
+            values_normalized = utils.normalize(
+                values_unnormalized, np.mean(values_unnormalized),
+                np.std(values_unnormalized))
+            values = utils.unnormalize(
+                values_normalized, np.mean(q_values), np.std(q_values))
 
             if self.gae_lambda is not None:
                 ## append a dummy T+1 value for simpler recursive calculation
@@ -139,7 +132,8 @@ class PGAgent(BaseAgent):
                         ## 0 otherwise.
                     ## HINT 2: self.gae_lambda is the lambda value in the
                         ## GAE formula
-                    print("COMPUTE GAE")
+                    delta = rews[i] + self.gamma * values[i + 1] * (1 - terminals[i]) - values[i]
+                    advantages[i] = delta + self.gamma * self.gae_lambda * advantages[i + 1] * (1 - terminals[i])
 
                 # remove dummy advantage
                 advantages = advantages[:-1]
@@ -147,7 +141,6 @@ class PGAgent(BaseAgent):
             else:
                 ## TODO: compute advantage estimates using q_values, and values as baselines
                 advantages = q_values - values
-                # print(advantages)
 
         # Else, just set the advantage to [Q]
         else:
@@ -159,8 +152,6 @@ class PGAgent(BaseAgent):
             ## and a standard deviation of one
             advantages = utils.normalize(
                 advantages, np.mean(advantages), np.std(advantages))
-            # advantages = (advantages - advantages_mean) / (advantages_std + 1e-8)
-            # print(advantages)
 
         return advantages
 
