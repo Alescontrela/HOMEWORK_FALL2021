@@ -99,7 +99,7 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         action_distribution = self.forward(obs)
         return cast(
             np.ndarray,
-            action_distribution.sample().cpu().detach().numpy(),
+            action_distribution.sample().numpy(),
         )
         # # TODO return the action that the policy prescribes
         # if self.discrete:
@@ -145,6 +145,7 @@ class MLPPolicyPG(MLPPolicy):
         observations = ptu.from_numpy(observations)
         actions = ptu.from_numpy(actions)
         advantages = ptu.from_numpy(advantages)
+        q_values = np.expand_dims(q_values, axis=-1)
 
         # TODO: update the policy using policy gradient
         # HINT1: Recall that the expression that we want to MAXIMIZE
@@ -158,10 +159,7 @@ class MLPPolicyPG(MLPPolicy):
 
         dist = self.forward(observations)
         log_prob = dist.log_prob(actions)
-        # if not self.discrete:
-        #     log_prob = log_prob.sum(1)
         loss = -torch.dot(log_prob, advantages)
-        # loss = -(log_prob * advantages).sum()
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -179,36 +177,8 @@ class MLPPolicyPG(MLPPolicy):
             # q_vals_concat = np.expand_dims(np.concatenate(q_values), axis=-1)
             # standardized_q_values = (q_values - np.mean(q_vals_concat)) / np.std(q_vals_concat)
 
-            # baseline_losses = []
-            # i = 0
-            # for curr_q_values in standardized_q_values:
-            #     # Get observations[:-1] and next_obs = observations[1:]
-            #     curr_obs = observations[i:i + len(curr_q_values) - 1]
-            #     next_obs = observations[i + 1:i + len(curr_q_values)]
-            #     curr_q_values_pt = ptu.from_numpy(np.expand_dims(curr_q_values[:-1], axis=-1))
-            #     baseline_losses.append(self.baseline_loss(
-            #         self.baseline(curr_obs),
-            #         curr_q_values_pt + self.baseline(next_obs)
-            #     ))
-            #     i += len(curr_q_values)
-            # baseline_loss = torch.stack(baseline_losses, dim=0).sum(dim=0)
-            # baseline_loss = torch.sum(baseline_losses)
-
-
-            # standardized_q_values = ptu.from_numpy(
-            #     (q_vals_concat - np.mean(q_vals_concat)) / np.std(q_vals_concat))
-
-            # Not right but just playing with this idea for now.
-            # next_observations = torch.roll(observations, 1)
-            
-            # print("===")
-            # print(standardized_q_values.size())
-            # print(self.baseline(next_observations).size())
-            # print(torch.add(standardized_q_values, self.baseline(next_observations)).size())
-            q_vals_concat = np.expand_dims(np.concatenate(q_values), axis=-1)
-            targets = ptu.from_numpy(utils.normalize(q_vals_concat, q_vals_concat.mean(), q_vals_concat.std()))
-            # standardized_q_values = ptu.from_numpy(
-            #     (q_vals_concat - np.mean(q_vals_concat)) / (np.std(q_vals_concat) + 1e-8))
+            # q_vals_concat = np.expand_dims(np.concatenate(q_values), axis=-1)
+            targets = ptu.from_numpy(utils.normalize(q_values, q_values.mean(), q_values.std()))
             baseline_loss = F.mse_loss(self.baseline(observations), targets)
             self.baseline_optimizer.zero_grad()
             baseline_loss.backward()
