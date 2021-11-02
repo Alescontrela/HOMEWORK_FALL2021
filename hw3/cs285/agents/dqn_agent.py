@@ -69,7 +69,7 @@ class DQNAgent(object):
         # HINT1: remember that self.last_obs must always point to the newest/latest observation
         # HINT2: remember the following useful function that you've seen before:
             #obs, reward, done, info = env.step(action)
-        obs, reward, done, info = self.env.step(action)
+        self.last_obs, reward, done, info = self.env.step(action)
 
         # TODO store the result of taking this action into the replay buffer
         # HINT1: see your replay buffer's `store_effect` function
@@ -78,7 +78,8 @@ class DQNAgent(object):
             self.replay_buffer_idx, action, reward, done)
 
         # TODO if taking this step resulted in done, reset the env (and the latest observation)
-        self.last_obs = self.env.reset() if done else obs
+        if done:
+            self.last_obs = self.env.reset()
 
     def sample(self, batch_size):
         if self.replay_buffer.can_sample(self.batch_size):
@@ -95,7 +96,11 @@ class DQNAgent(object):
 
             # TODO fill in the call to the update function using the appropriate tensors
             log = self.critic.update(
-                ob_no, ac_na, next_ob_no, re_n, terminal_n
+                ob_no,
+                ac_na,
+                next_ob_no,
+                re_n,
+                terminal_n,
             )
 
             # TODO update the target network periodically 

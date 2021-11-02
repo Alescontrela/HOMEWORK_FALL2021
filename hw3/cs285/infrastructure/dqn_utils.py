@@ -99,6 +99,8 @@ class Ipdb(nn.Module):
 
 class PreprocessAtari(nn.Module):
     def forward(self, x):
+        if len(x.shape) != 4:
+            x = torch.unsqueeze(x, 0)
         x = x.permute(0, 3, 1, 2).contiguous()
         return x / 255.
 
