@@ -59,26 +59,28 @@ class MPCPolicy(BasePolicy):
             # [self.low, self.high]
             return random_action_sequences
         elif self.sample_strategy == 'cem':
-            # TODO(Q5): Implement action selection using CEM.
             # Begin with randomly selected actions, then refine the sampling distribution
             # iteratively as described in Section 3.3, "Iterative Random-Shooting with Refinement" of
             # https://arxiv.org/pdf/1909.11652.pdf
+            A = np.random.uniform(
+                self.low, self.high,
+                size=(num_sequences, horizon, self.ac_dim))
+            A_mean = np.mean(A, axis=0).flatten()
+            A_std = np.diag(np.std(A, axis=0).flatten())
+
             for i in range(self.cem_iterations):
-                # - Sample candidate sequences from a Gaussian with the current
-                #   elite mean and variance
-                #     (Hint: remember that for the first iteration, we instead sample
-                #      uniformly at random just like we do for random-shooting)
-                # - Get the top `self.cem_num_elites` elites
-                #     (Hint: what existing function can we use to compute rewards for
-                #      our candidate sequences in order to rank them?)
-                # - Update the elite mean and variance
-                pass
+                A_flat = np.random.multivariate_normal(
+                    A_mean, A_std, size=num_sequences)
+                for j in range(num_sequences):
+                    A[j,:,:] = np.reshape(A_flat[j,:], (horizon, self.ac_dim))
+                mean_rewards = self.evaluate_candidate_sequences(A, obs)
+                cem_elite_idxs = np.argpartition(
+                    -mean_rewards, self.cem_num_elites, axis=0)
+                A_elites = A[cem_elite_idxs[:self.cem_num_elites], :, :]
+                A_mean = np.mean(A_elites, axis=0).flatten()
+                A_std = np.diag(np.std(A_elites, axis=0).flatten())
 
-            # TODO(Q5): Set `cem_action` to the appropriate action sequence chosen by CEM.
-            # The shape should be (horizon, self.ac_dim)
-            cem_action = None
-
-            return cem_action[None]
+            return np.reshape(A_mean, (horizon, self.ac_dim))[None]
         else:
             raise Exception(f"Invalid sample_strategy: {self.sample_strategy}")
 
